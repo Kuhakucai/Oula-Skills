@@ -1,0 +1,48 @@
+name: Install Smoke Test
+
+on:
+  schedule:
+    - cron: '17 3 * * 1'   # 每周一 03:17 UTC（避免整点拥堵）
+  workflow_dispatch:        # 手动触发
+  push:
+    branches: [main]
+    paths:
+      - 'install.sh'        # 改了 install.sh 也跑一次
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  curl-bash-project:
+    name: curl|bash 项目级安装
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: 用 curl|bash 装到临时目录
+        run: |
+          set -e
+          PROJ=$(mktemp -d)
+          echo "PROJ=$PROJ"
+          curl -fsSL "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/install.sh" | bash -s -- "$PROJ"
+          test -f "$PROJ/.agents/skills/auto-plan-and-execute/SKILL.md"
+          test -f "$PROJ/.claude/skills/auto-plan-and-execute/SKILL.md"
+          test -x "$PROJ/.agents/skills/auto-plan-and-execute/auto-flow.sh"
+
+  curl-bash-global:
+    name: curl|bash 全局安装
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: 用 curl|bash -g 装到临时 HOME
+        run: |
+          set -e
+          FAKE_HOME=$(mktemp -d)
+          HOME="$FAKE_HOME" bash -c "curl -fsSL 'https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/install.sh' | bash -s -- -g"
+          test -f "$FAKE_HOME/.agents/skills/auto-plan-and-execute/SKILL.md"
+          test -f "$FAKE_HOME/.claude/skills/auto-plan-and-execute/SKILL.md"

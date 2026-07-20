@@ -1,0 +1,98 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  release:
+    name: 打包并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 取完整历史以生成 changelog
+
+      - name: 解析版本与上一个 tag
+        id: vars
+        run: |
+          set -e
+          VERSION="${GITHUB_REF#refs/tags/}"
+          PREV_TAG="$(git tag --sort=-version:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${VERSION}$" | head -n1 || true)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "prev_tag=${PREV_TAG}" >> "$GITHUB_OUTPUT"
+          echo "VERSION=${VERSION}, PREV_TAG=${PREV_TAG:-<首发>}"
+
+      - name: 生成 changelog
+        id: changelog
+        run: |
+          set -e
+          VERSION="${{ steps.vars.outputs.version }}"
+          PREV="${{ steps.vars.outputs.prev_tag }}"
+          {
+            echo "## ${VERSION}"
+            echo ""
+            if [ -n "$PREV" ]; then
+              echo "### 自 ${PREV} 以来的变更"
+              echo ""
+              git log --pretty=format:'- %s' "${PREV}..${VERSION}"
+            else
+              echo "### 初版发布"
+              echo ""
+              git log --pretty=format:'- %s' "${VERSION}"
+            fi
+            echo ""
+            echo ""
+            echo "### 安装"
+            echo ""
+            echo '```bash'
+            echo "# 项目级安装到当前目录（latest 跟随最新稳定版）"
+            echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/latest/install.sh | bash"
+            echo ""
+            echo "# 全局安装"
+            echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/latest/install.sh | bash -s -- -g"
+            echo ""
+            echo "# 锁定本版本"
+            echo "curl -fsSL https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/${VERSION}/install.sh | bash"
+            echo '```'
+          } > CHANGELOG_RELEASE.md
+          cat CHANGELOG_RELEASE.md
+
+      - name: 打包归档
+        run: |
+          set -e
+          VERSION="${{ steps.vars.outputs.version }}"
+          TARBALL="auto-plan-and-execute-${VERSION}.tar.gz"
+          # 用 git archive 自动排除 .git/.github/未跟踪文件
+          git archive --format=tar.gz --prefix="auto-plan-and-execute-${VERSION}/" -o "${TARBALL}" "${VERSION}"
+          ls -lh "${TARBALL}"
+          sha256sum "${TARBALL}" > "${TARBALL}.sha256"
+          cat "${TARBALL}.sha256"
+
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.vars.outputs.version }}
+          body_path: CHANGELOG_RELEASE.md
+          files: |
+            auto-plan-and-execute-${{ steps.vars.outputs.version }}.tar.gz
+            auto-plan-and-execute-${{ steps.vars.outputs.version }}.tar.gz.sha256
+          draft: false
+          prerelease: ${{ contains(steps.vars.outputs.version, '-') }}
+          make_latest: ${{ !contains(steps.vars.outputs.version, '-') }}
+
+      - name: 滚动 latest tag（仅非预发布）
+        if: ${{ !contains(steps.vars.outputs.version, '-') }}
+        run: |
+          set -e
+          VERSION="${{ steps.vars.outputs.version }}"
+          echo "将 latest tag 指向 ${VERSION}"
+          git tag -f latest "${VERSION}"
+          git push -f origin latest
