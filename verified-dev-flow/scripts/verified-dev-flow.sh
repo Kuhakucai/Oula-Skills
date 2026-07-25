@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
-# auto-flow.sh — auto-plan-and-execute 四阶段自动化编排
+# verified-dev-flow.sh — verified-dev-flow 四阶段自动化编排
 #
 # 用法:
-#   scripts/auto-flow.sh "<需求文本>"          # 直接传需求文本
-#   scripts/auto-flow.sh <需求文档路径>         # 传需求文档（.md 文件）
-#   scripts/auto-flow.sh --resume <名称|uuid|名称-uuid>
-#   scripts/auto-flow.sh --status <名称|uuid|名称-uuid>
-#   scripts/auto-flow.sh --list
-#   scripts/auto-flow.sh --help
+#   scripts/verified-dev-flow.sh "<需求文本>"          # 直接传需求文本
+#   scripts/verified-dev-flow.sh <需求文档路径>         # 传需求文档（.md 文件）
+#   scripts/verified-dev-flow.sh --resume <名称|uuid|名称-uuid>
+#   scripts/verified-dev-flow.sh --status <名称|uuid|名称-uuid>
+#   scripts/verified-dev-flow.sh --list
+#   scripts/verified-dev-flow.sh --help
 #
 # 环境变量:
 #   MAX_PLAN_ITER       计划阶段最大迭代轮数（默认 3）
 #   MAX_EXEC_ITER       实施阶段最大迭代轮数（默认 3）
 #   AGENT_CMD          agent CLI 路径（默认 ${CLAUDE_BIN:-claude}）
-#   AUTO_FLOW_DIR       工作目录（默认 .auto-flow）
+#   VERIFIED_DEV_FLOW_DIR       工作目录（默认 .verified-dev-flow）
 #   SKIP_CONFIRM        设为 1 跳过实施前人工确认（仅 CI）
-#   AUTO_FLOW_VERBOSE   设为 1（默认）开启 Claude stream-json 事件日志；设为 0 静默
+#   VERIFIED_DEV_FLOW_VERBOSE   设为 1（默认）开启 Claude stream-json 事件日志；设为 0 静默
+#   CLAUDE_DANGEROUS_PERMISSIONS 设为 1 才向 Claude 传入 --dangerously-skip-permissions
 
 set -euo pipefail
 
@@ -32,8 +33,9 @@ AGENT_CMD="${AGENT_CMD:-${CLAUDE_BIN:-claude}}"
 AGENT_ARGS="${AGENT_ARGS:-}"
 AGENT_PROMPT_MODE="${AGENT_PROMPT_MODE:-}"
 AGENT_LABEL="${AGENT_LABEL:-$(basename "$AGENT_CMD")}"
-AUTO_FLOW_DIR="${AUTO_FLOW_DIR:-.auto-flow}"
+VERIFIED_DEV_FLOW_DIR="${VERIFIED_DEV_FLOW_DIR:-.verified-dev-flow}"
 SKIP_CONFIRM="${SKIP_CONFIRM:-0}"
+CLAUDE_DANGEROUS_PERMISSIONS="${CLAUDE_DANGEROUS_PERMISSIONS:-0}"
 
 STAGE_INIT="init"
 STAGE_PLAN="plan"
@@ -43,31 +45,31 @@ STAGE_SUMMARY="summary"
 STAGE_DONE="done"
 
 # ---------- 工具函数 ----------
-log()  { printf "\033[1;34m[auto-flow]\033[0m %s\n" "$*"; }
-warn() { printf "\033[1;33m[auto-flow]\033[0m %s\n" "$*" >&2; }
-err()  { printf "\033[1;31m[auto-flow]\033[0m %s\n" "$*" >&2; }
+log()  { printf "\033[1;34m[verified-dev-flow]\033[0m %s\n" "$*"; }
+warn() { printf "\033[1;33m[verified-dev-flow]\033[0m %s\n" "$*" >&2; }
+err()  { printf "\033[1;31m[verified-dev-flow]\033[0m %s\n" "$*" >&2; }
 
 usage() {
   cat <<EOF
-auto-plan-and-execute / auto-flow.sh
+verified-dev-flow / verified-dev-flow.sh
 
 用法:
-  scripts/auto-flow.sh "<需求文本>"
+  scripts/verified-dev-flow.sh "<需求文本>"
       把整段需求作为字符串传入；脚本会自动命名、生成 UUID 并启动流程。
 
-  scripts/auto-flow.sh <需求文档路径>
+  scripts/verified-dev-flow.sh <需求文档路径>
       传一个 markdown 文件作为需求；脚本读取其 H1 标题作为默认命名。
 
-  scripts/auto-flow.sh --resume <名称|uuid|名称-uuid>
+  scripts/verified-dev-flow.sh --resume <名称|uuid|名称-uuid>
       从上次中断处继续。
 
-  scripts/auto-flow.sh --status <名称|uuid|名称-uuid>
+  scripts/verified-dev-flow.sh --status <名称|uuid|名称-uuid>
       查看某个流程的当前状态。
 
-  scripts/auto-flow.sh --list
+  scripts/verified-dev-flow.sh --list
       列出所有流程实例。
 
-  scripts/auto-flow.sh --help
+  scripts/verified-dev-flow.sh --help
 
 环境变量:
   MAX_PLAN_ITER (默认 $MAX_PLAN_ITER)
@@ -75,9 +77,10 @@ auto-plan-and-execute / auto-flow.sh
   AGENT_CMD    (默认 ${CLAUDE_BIN:-claude}，当前为 $AGENT_CMD)
   AGENT_ARGS   (默认空)  传给代理 CLI 的附加参数
   AGENT_PROMPT_MODE (默认自动)  claude / arg / stdin
-  AUTO_FLOW_DIR (默认 $AUTO_FLOW_DIR)
+  VERIFIED_DEV_FLOW_DIR (默认 $VERIFIED_DEV_FLOW_DIR)
   SKIP_CONFIRM  (默认 0)  设为 1 跳过实施前人工确认
-  AUTO_FLOW_VERBOSE (默认 1)  设为 0 关闭 Claude stream-json 事件日志
+  CLAUDE_DANGEROUS_PERMISSIONS (默认 0)  设为 1 才关闭 Claude 权限确认
+  VERIFIED_DEV_FLOW_VERBOSE (默认 1)  设为 0 关闭 Claude stream-json 事件日志
 EOF
 }
 
@@ -92,8 +95,7 @@ gen_uuid() {
   if command -v uuidgen >/dev/null 2>&1; then
     uuidgen | tr 'A-Z' 'a-z' | tr -d '-' | cut -c1-8
   else
-    LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 8
-    echo
+    od -An -N16 -tx1 /dev/urandom | tr -d ' \n' | cut -c1-8
   fi
 }
 
@@ -139,14 +141,14 @@ infer_name() {
 
 # ---------- 工作目录 ----------
 
-work_dir() { echo "$AUTO_FLOW_DIR/$1"; }
+work_dir() { echo "$VERIFIED_DEV_FLOW_DIR/$1"; }
 state_file() { echo "$(work_dir "$1")/state.json"; }
 
 # 列出所有 instance 目录名
 list_instances() {
-  [ -d "$AUTO_FLOW_DIR" ] || return 0
-  ls -1 "$AUTO_FLOW_DIR" 2>/dev/null | while read -r d; do
-    [ -d "$AUTO_FLOW_DIR/$d" ] && echo "$d"
+  [ -d "$VERIFIED_DEV_FLOW_DIR" ] || return 0
+  ls -1 "$VERIFIED_DEV_FLOW_DIR" 2>/dev/null | while read -r d; do
+    [ -d "$VERIFIED_DEV_FLOW_DIR/$d" ] && echo "$d"
   done
 }
 
@@ -244,12 +246,18 @@ run_agent() {
 
   case "$mode" in
     claude)
-      if [ "${AUTO_FLOW_VERBOSE:-1}" = "1" ]; then
+      local claude_args=(-p "$prompt")
+      if [ ${#args[@]} -gt 0 ]; then
+        claude_args+=("${args[@]}")
+      fi
+      if [ "$CLAUDE_DANGEROUS_PERMISSIONS" = "1" ]; then
+        warn "CLAUDE_DANGEROUS_PERMISSIONS=1，已显式关闭 Claude 权限确认"
+        claude_args+=(--dangerously-skip-permissions)
+      fi
+      if [ "${VERIFIED_DEV_FLOW_VERBOSE:-1}" = "1" ]; then
+        claude_args+=(--verbose --output-format stream-json)
         set +e
-        "$AGENT_CMD" -p "$prompt" \
-          --dangerously-skip-permissions \
-          --verbose \
-          --output-format stream-json \
+        "$AGENT_CMD" "${claude_args[@]}" \
         | while IFS= read -r line; do
             if command -v jq >/dev/null 2>&1; then
               echo "$line" | jq -r '
@@ -278,7 +286,7 @@ run_agent() {
         set -e
         return "$rc"
       else
-        "$AGENT_CMD" -p "$prompt" --dangerously-skip-permissions
+        "$AGENT_CMD" "${claude_args[@]}"
       fi
       ;;
     arg)
@@ -298,13 +306,17 @@ run_agent() {
 check_status() {
   local doc="$1"
   [ -f "$doc" ] || { echo "MISSING"; return; }
-  if tail -n 50 "$doc" | grep -qE "^STATUS: PASS$"; then
-    echo "PASS"
-  elif tail -n 50 "$doc" | grep -qE "^STATUS: NEEDS_REVISION$"; then
-    echo "NEEDS_REVISION"
-  else
-    echo "MISSING"
-  fi
+  local last_line
+  last_line="$(awk 'NF { line=$0 } END { print line }' "$doc" | tr -d '\r')"
+  case "$last_line" in
+    "STATUS: PASS") echo "PASS" ;;
+    "STATUS: NEEDS_REVISION") echo "NEEDS_REVISION" ;;
+    *) echo "MISSING" ;;
+  esac
+}
+
+plan_checksum() {
+  cksum "$1" | awk '{ print $1 ":" $2 }'
 }
 
 # ---------- 阶段实现 ----------
@@ -319,6 +331,17 @@ stage_plan_loop() {
   [ -z "$start_iter" ] && start_iter=0
   start_iter=$((start_iter + 0))
 
+  if [ "$start_iter" -ge "$MAX_PLAN_ITER" ]; then
+    local last_review="$wd/plan-review-v${start_iter}.md"
+    if [ "$(check_status "$last_review")" = "PASS" ]; then
+      finalize_plan "$instance" "$wd/plan-v${start_iter}.md"
+      return 0
+    fi
+    err "计划审查已达到最大轮数且仍未通过；流程停止。"
+    err "修复问题后提高 MAX_PLAN_ITER，再用 --resume 继续。"
+    return 4
+  fi
+
   for ((i=start_iter+1; i<=MAX_PLAN_ITER; i++)); do
     log "═══ 计划阶段 第 $i/$MAX_PLAN_ITER 轮 ═══"
     local plan_doc="$wd/plan-v$i.md"
@@ -330,7 +353,7 @@ stage_plan_loop() {
       log "[1/2] 生成计划方案 $plan_doc"
       local prompt
       if [ -f "$prev_review" ]; then
-        prompt="请按 auto-plan-and-execute skill 中 agents/plan-write.md 的角色编写计划。
+        prompt="请按 verified-dev-flow skill 中 agents/plan-write.md 的角色编写计划。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -347,7 +370,7 @@ stage_plan_loop() {
 
 请基于审查报告反馈迭代计划方案，输出完整的新版方案（不要写元描述/对比/迭代记录）。"
       else
-        prompt="请按 auto-plan-and-execute skill 中 agents/plan-write.md 的角色编写计划。
+        prompt="请按 verified-dev-flow skill 中 agents/plan-write.md 的角色编写计划。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -372,7 +395,7 @@ stage_plan_loop() {
     # 审查计划
     if [ ! -f "$review_doc" ]; then
       log "[2/2] 审查计划方案 $review_doc"
-      local rprompt="请按 auto-plan-and-execute skill 中 agents/plan-review.md 的角色审查计划。
+      local rprompt="请按 verified-dev-flow skill 中 agents/plan-review.md 的角色审查计划。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -416,9 +439,9 @@ stage_plan_loop() {
     esac
   done
 
-  warn "已达到计划阶段最大轮数 ${MAX_PLAN_ITER}，以最后一版计划进入下一阶段"
-  finalize_plan "$instance" "$(work_dir "$instance")/plan-v$MAX_PLAN_ITER.md"
-  return 0
+  err "计划审查达到最大轮数 ${MAX_PLAN_ITER} 后仍未通过；不会进入实施阶段。"
+  err "修复问题后提高 MAX_PLAN_ITER，再用 --resume 继续。"
+  return 4
 }
 
 # 把最终通过的计划复制为 plan.md（无版本后缀）
@@ -427,8 +450,51 @@ finalize_plan() {
   local plan_final
   plan_final="$(work_dir "$instance")/plan.md"
   cp "$src" "$plan_final"
+  plan_checksum "$plan_final" > "$(work_dir "$instance")/plan-approved.cksum"
   log "已将定稿计划复制为 $plan_final"
   write_state "$instance" "$STAGE_CONFIRM" "$(read_state "$instance" plan_iter)" "0" "$plan_final"
+}
+
+ensure_plan_approved() {
+  local instance="$1" plan_final="$2"
+  local approved_checksum current_checksum
+  approved_checksum="$(cat "$(work_dir "$instance")/plan-approved.cksum" 2>/dev/null || true)"
+  current_checksum="$(plan_checksum "$plan_final")"
+  if [ -z "$approved_checksum" ] || [ "$approved_checksum" = "$current_checksum" ]; then
+    return 0
+  fi
+
+  local manual_review
+  manual_review="$(work_dir "$instance")/plan-review-manual.md"
+  warn "检测到 plan.md 在通过审查后被修改，正在重新审查。"
+  local rprompt="请按 verified-dev-flow skill 中 agents/plan-review.md 的角色审查人工修改后的定稿计划。
+
+请先读取:
+- $SKILL_ROOT/agents/plan-review.md
+- $SKILL_ROOT/references/status-protocol.md
+- $SKILL_ROOT/references/document-templates.md
+
+任务输入:
+- 项目背景与需求文档: $(work_dir "$instance")/context.md
+- 待审计划方案: $plan_final
+- 审查报告输出路径: $manual_review
+
+请独立审查，并确保报告最后一个非空行是 STATUS: PASS 或 STATUS: NEEDS_REVISION。"
+  run_agent "$rprompt"
+  case "$(check_status "$manual_review")" in
+    PASS)
+      plan_checksum "$plan_final" > "$(work_dir "$instance")/plan-approved.cksum"
+      log "人工修改后的计划已重新审查通过"
+      ;;
+    NEEDS_REVISION)
+      err "人工修改后的计划未通过审查；请按 $manual_review 修订后再 --resume。"
+      return 5
+      ;;
+    *)
+      err "人工修改计划的审查报告缺少严格的末尾 STATUS 标记。"
+      return 3
+      ;;
+  esac
 }
 
 stage_confirm() {
@@ -440,6 +506,7 @@ stage_confirm() {
   log "请在另一个终端打开审阅。"
 
   if [ "$SKIP_CONFIRM" = "1" ]; then
+    ensure_plan_approved "$instance" "$plan_final" || return $?
     warn "SKIP_CONFIRM=1，跳过人工确认直接进入实施"
     write_state "$instance" "$STAGE_EXECUTE" "$(read_state "$instance" plan_iter)" "0" "$plan_final"
     return 0
@@ -450,6 +517,7 @@ stage_confirm() {
     read -r ans </dev/tty
     case "$ans" in
       y|Y)
+        ensure_plan_approved "$instance" "$plan_final" || return $?
         log "用户确认，进入实施阶段"
         write_state "$instance" "$STAGE_EXECUTE" "$(read_state "$instance" plan_iter)" "0" "$plan_final"
         return 0
@@ -480,6 +548,17 @@ stage_execute_loop() {
   [ -z "$start_iter" ] && start_iter=0
   start_iter=$((start_iter + 0))
 
+  if [ "$start_iter" -ge "$MAX_EXEC_ITER" ]; then
+    local last_review="$wd/execution-review-v${start_iter}.md"
+    if [ "$(check_status "$last_review")" = "PASS" ]; then
+      write_state "$instance" "$STAGE_SUMMARY" "$(read_state "$instance" plan_iter)" "$start_iter" "$plan_final"
+      return 0
+    fi
+    err "实施审查已达到最大轮数且仍未通过；流程停止。"
+    err "修复问题后提高 MAX_EXEC_ITER，再用 --resume 继续。"
+    return 4
+  fi
+
   for ((i=start_iter+1; i<=MAX_EXEC_ITER; i++)); do
     log "═══ 实施阶段 第 $i/$MAX_EXEC_ITER 轮 ═══"
     local exec_log="$wd/execution-log-v$i.md"
@@ -490,7 +569,7 @@ stage_execute_loop() {
       log "[1/2] 实施计划，日志输出到 $exec_log"
       local prompt
       if [ -f "$prev_review" ]; then
-        prompt="请按 auto-plan-and-execute skill 中 agents/execute-plan.md 的角色实施计划。
+        prompt="请按 verified-dev-flow skill 中 agents/execute-plan.md 的角色实施计划。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -508,7 +587,7 @@ stage_execute_loop() {
 
 请基于审查报告中的 P0/P1 问题进行修补式调整，并产出实施日志。"
       else
-        prompt="请按 auto-plan-and-execute skill 中 agents/execute-plan.md 的角色实施计划。
+        prompt="请按 verified-dev-flow skill 中 agents/execute-plan.md 的角色实施计划。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -533,7 +612,7 @@ stage_execute_loop() {
 
     if [ ! -f "$review_doc" ]; then
       log "[2/2] 审查实施 $review_doc"
-      local rprompt="请按 auto-plan-and-execute skill 中 agents/execution-review.md 的角色审查实施。
+      local rprompt="请按 verified-dev-flow skill 中 agents/execution-review.md 的角色审查实施。
 
 执行环境信息:
 - skill 根目录: $SKILL_ROOT
@@ -548,9 +627,11 @@ stage_execute_loop() {
 - 项目背景与需求文档: $ctx
 - 定稿计划方案: $plan_final
 - 本轮实施日志: $exec_log
+- 流程开始时的 Git 状态: $wd/baseline-status.txt
+- 流程开始时的 Git diff: $wd/baseline.diff
 - 审查报告输出路径: $review_doc
 
-请用 git diff 看实际改动，独立审查实施质量，末尾输出 STATUS: PASS 或 STATUS: NEEDS_REVISION（独占一行）。"
+请比较当前 git status/diff 与基线文件，只审查本流程新增的变更；独立审查实施质量，并确保报告最后一个非空行是 STATUS: PASS 或 STATUS: NEEDS_REVISION。"
       run_agent "$rprompt"
       [ -f "$review_doc" ] || { err "未产出 $review_doc"; exit 2; }
     else
@@ -577,9 +658,9 @@ stage_execute_loop() {
     esac
   done
 
-  warn "已达到实施阶段最大轮数 ${MAX_EXEC_ITER}，强制进入总结阶段"
-  write_state "$instance" "$STAGE_SUMMARY" "$(read_state "$instance" plan_iter)" "$MAX_EXEC_ITER" "$plan_final"
-  return 0
+  err "实施审查达到最大轮数 ${MAX_EXEC_ITER} 后仍未通过；不会生成完成总结。"
+  err "修复问题后提高 MAX_EXEC_ITER，再用 --resume 继续。"
+  return 4
 }
 
 stage_summary() {
@@ -644,6 +725,15 @@ cmd_start() {
   fi
   mkdir -p "$wd"
 
+  if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git rev-parse HEAD > "$wd/baseline-head.txt" 2>/dev/null || true
+    git status --short > "$wd/baseline-status.txt" 2>/dev/null || true
+    git diff --binary > "$wd/baseline.diff" 2>/dev/null || true
+  else
+    printf '%s\n' "当前目录不是 Git 工作树" > "$wd/baseline-status.txt"
+    : > "$wd/baseline.diff"
+  fi
+
   # 生成 context.md
   if [ "$is_file" = "true" ]; then
     cp "$input" "$wd/context.md"
@@ -675,15 +765,15 @@ cmd_status() {
 }
 
 cmd_list() {
-  if [ ! -d "$AUTO_FLOW_DIR" ]; then
-    log "尚无任何流程实例（$AUTO_FLOW_DIR 不存在）"
+  if [ ! -d "$VERIFIED_DEV_FLOW_DIR" ]; then
+    log "尚无任何流程实例（$VERIFIED_DEV_FLOW_DIR 不存在）"
     return 0
   fi
-  log "已有流程实例（$AUTO_FLOW_DIR/）:"
+  log "已有流程实例（$VERIFIED_DEV_FLOW_DIR/）:"
   local count=0
   while IFS= read -r inst; do
     [ -z "$inst" ] && continue
-    local sf="$AUTO_FLOW_DIR/$inst/state.json"
+    local sf="$VERIFIED_DEV_FLOW_DIR/$inst/state.json"
     if [ -f "$sf" ]; then
       local stage
       stage="$(read_state "$inst" stage)"
@@ -756,4 +846,6 @@ main() {
   esac
 }
 
-main "$@"
+if [ "${VERIFIED_DEV_FLOW_LIB_ONLY:-0}" != "1" ]; then
+  main "$@"
+fi

@@ -1,6 +1,6 @@
 # STATUS 收敛标记协议
 
-本协议被 `plan-review` 和 `execution-review` 两个角色严格遵守。它是 auto-flow.sh 判断"是否继续迭代"的唯一信号。
+本协议被 `plan-review` 和 `execution-review` 两个角色严格遵守。它是 verified-dev-flow.sh 判断"是否继续迭代"的唯一信号。
 
 ## 标记格式
 
@@ -42,15 +42,15 @@ STATUS: NEEDS_REVISION
 
 ## 解析说明
 
-编排脚本使用以下命令检测：
+编排脚本只读取报告的**最后一个非空行**：
 
 ```bash
-tail -n 50 "$report" | grep -qE "^STATUS: PASS$"
-tail -n 50 "$report" | grep -qE "^STATUS: NEEDS_REVISION$"
+awk 'NF { line=$0 } END { print line }' "$report"
 ```
 
 因此：
-- 必须在文件**末尾 50 行内**出现
+- 必须是文件的**最后一个非空行**
 - 必须**独占一行**
 - 大小写敏感，**完全匹配**
 - 不要加 `**STATUS: PASS**`、`> STATUS: PASS`、`# STATUS: PASS` 等修饰
+- STATUS 后不要再追加正文、代码块或说明

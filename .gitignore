@@ -1,8 +1,16 @@
 # Runtime artifacts
-.auto-flow/
+.verified-dev-flow/
 
 # Editor and operating-system files
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+
+# Python bytecode cache
+**/__pycache__/
+*.pyc
+
+# Unpublished draft skills
+/develop-reliable-mcp/
+/douyin-account-strategist/

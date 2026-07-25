@@ -57,7 +57,7 @@
 ## 工作目录结构
 
 ```
-.auto-flow/{需求名称}-{uuid}/
+.verified-dev-flow/{需求名称}-{uuid}/
 ├── context.md                          # 需求背景（输入）
 ├── state.json                          # 当前阶段、轮数、定稿计划路径
 ├── plan-v1.md, plan-v2.md, ...         # 计划迭代版本
@@ -91,5 +91,5 @@ for round in 1..MAX_ITER:
         PASS           → 跳出，进入下阶段
         NEEDS_REVISION → 继续下一轮
         MISSING        → 报错退出（要求人工修复后 --resume）
-到达 MAX_ITER 仍 NEEDS_REVISION → 警告并强制进入下阶段
+到达 MAX_ITER 仍 NEEDS_REVISION → 停止流程；修复后提高对应 MAX_ITER 并 --resume
 ```

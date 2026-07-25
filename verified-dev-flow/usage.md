@@ -27,8 +27,8 @@
 仅靠"STATUS 通过"：审查可能永远挑得出问题，无法收敛
 
 A + B 组合：
-- **A（语义判断）**：审查报告必须以 `STATUS: PASS` / `STATUS: NEEDS_REVISION` 结尾，脚本 grep 判断
-- **B（轮数兜底）**：每阶段最多 N 轮（默认 3），达到上限强制进入下阶段
+- **A（语义判断）**：审查报告最后一个非空行必须是 `STATUS: PASS` / `STATUS: NEEDS_REVISION`，脚本严格匹配
+- **B（轮数兜底）**：每阶段最多 N 轮（默认 3），达到上限仍未通过则停止，修复后提高上限并恢复
 
 ### 为什么人工确认点放在"开始实施前"
 
@@ -68,31 +68,31 @@ A + B 组合：
 ### Step 2：启动
 
 > 调用形式取决于安装方式：
-> - **项目级**：`.claude/skills/auto-plan-and-execute/auto-flow.sh ...`
-> - **全局**（`install.sh -g`）：直接 `auto-plan-and-execute ...`（前提是 PATH 已包含软链接所在目录，详见 [README - 全局命令](README.md#全局命令仅--g-模式)）
+> - **项目级**：`.claude/skills/verified-dev-flow/verified-dev-flow.sh ...`
+> - **全局**（`install.sh -g`）：直接 `verified-dev-flow ...`（需确保 `$HOME/.local/bin` 已加入 PATH）
 >
-> 下文示例统一使用全局命令形式，项目级用户请把 `auto-plan-and-execute` 替换为完整脚本路径。
+> 下文示例统一使用全局命令形式，项目级用户请把 `verified-dev-flow` 替换为完整脚本路径。
 
 ```bash
 cd /path/to/your-project
-auto-plan-and-execute ./requirements.md
+verified-dev-flow ./requirements.md
 ```
 
 或：
 
 ```bash
-auto-plan-and-execute "给登录接口加 IP+账号 双维度限流..."
+verified-dev-flow "给登录接口加 IP+账号 双维度限流..."
 ```
 
 终端显示：
 
 ```
-[auto-flow] 已创建流程实例: login-rate-limit-a3f2c8d1
-[auto-flow]   - 工作目录: .auto-flow/login-rate-limit-a3f2c8d1
-[auto-flow]   - 输入类型: 文档(./requirements.md)
-[auto-flow] ═══ 计划阶段 第 1/3 轮 ═══
-[auto-flow] [1/2] 生成计划方案 .auto-flow/login-rate-limit-a3f2c8d1/plan-v1.md
-[auto-flow] → 调用 <agent> (<mode> 模式，独立调用/Session)...
+[verified-dev-flow] 已创建流程实例: login-rate-limit-a3f2c8d1
+[verified-dev-flow]   - 工作目录: .verified-dev-flow/login-rate-limit-a3f2c8d1
+[verified-dev-flow]   - 输入类型: 文档(./requirements.md)
+[verified-dev-flow] ═══ 计划阶段 第 1/3 轮 ═══
+[verified-dev-flow] [1/2] 生成计划方案 .verified-dev-flow/login-rate-limit-a3f2c8d1/plan-v1.md
+[verified-dev-flow] → 调用 <agent> (<mode> 模式，独立调用/Session)...
 ...
 ```
 
@@ -103,16 +103,16 @@ auto-plan-and-execute "给登录接口加 IP+账号 双维度限流..."
 通过后，脚本会把最终通过版**复制为 `plan.md`**（无版本后缀）：
 
 ```
-[auto-flow] ✅ 计划审查 STATUS: PASS，计划阶段完成
-[auto-flow] 已将定稿计划复制为 .auto-flow/login-rate-limit-a3f2c8d1/plan.md
+[verified-dev-flow] ✅ 计划审查 STATUS: PASS，计划阶段完成
+[verified-dev-flow] 已将定稿计划复制为 .verified-dev-flow/login-rate-limit-a3f2c8d1/plan.md
 ```
 
 ### Step 4：人工确认
 
 ```
-[auto-flow] ═══ 人工确认点 ═══
-[auto-flow] 计划已定稿: .auto-flow/login-rate-limit-a3f2c8d1/plan.md
-[auto-flow] 请在另一个终端打开审阅。
+[verified-dev-flow] ═══ 人工确认点 ═══
+[verified-dev-flow] 计划已定稿: .verified-dev-flow/login-rate-limit-a3f2c8d1/plan.md
+[verified-dev-flow] 请在另一个终端打开审阅。
 
 是否继续进入实施阶段? [y/n/e=编辑后再确认]:
 ```
@@ -131,18 +131,18 @@ auto-plan-and-execute "给登录接口加 IP+账号 双维度限流..."
 ### Step 6：最终总结
 
 ```
-[auto-flow] ═══ 生成最终总结 ═══
-[auto-flow] ✅ 流程完成！最终交付:
-[auto-flow]     - 计划方案: .auto-flow/login-rate-limit-a3f2c8d1/plan.md
-[auto-flow]     - 实施总结: .auto-flow/login-rate-limit-a3f2c8d1/final-summary.md
-[auto-flow]     - 工作目录: .auto-flow/login-rate-limit-a3f2c8d1
+[verified-dev-flow] ═══ 生成最终总结 ═══
+[verified-dev-flow] ✅ 流程完成！最终交付:
+[verified-dev-flow]     - 计划方案: .verified-dev-flow/login-rate-limit-a3f2c8d1/plan.md
+[verified-dev-flow]     - 实施总结: .verified-dev-flow/login-rate-limit-a3f2c8d1/final-summary.md
+[verified-dev-flow]     - 工作目录: .verified-dev-flow/login-rate-limit-a3f2c8d1
 ```
 
 ## 命令对照
 
 下表中 `<cmd>` 代表入口命令：
-- 项目级安装 → `<cmd>` = `.claude/skills/auto-plan-and-execute/auto-flow.sh`
-- 全局安装   → `<cmd>` = `auto-plan-and-execute`
+- 项目级安装 → `<cmd>` = `.claude/skills/verified-dev-flow/verified-dev-flow.sh`
+- 全局安装   → `<cmd>` = `verified-dev-flow`
 
 | 命令 | 作用 |
 |---|---|
@@ -160,20 +160,20 @@ auto-plan-and-execute "给登录接口加 IP+账号 双维度限流..."
 ### 调高迭代轮数
 
 ```bash
-MAX_PLAN_ITER=5 MAX_EXEC_ITER=5 auto-plan-and-execute "..."
+MAX_PLAN_ITER=5 MAX_EXEC_ITER=5 verified-dev-flow "..."
 ```
 
 ### 跳过人工确认（仅 CI）
 
 ```bash
-SKIP_CONFIRM=1 auto-plan-and-execute ./req.md
+SKIP_CONFIRM=1 verified-dev-flow ./req.md  # 仅用于受控 CI
 ```
 
 ### 代理内手动单跑某阶段
 
-不想跑完整 auto-flow，只想用 skill 跑某一个阶段时，在 Codex、Claude Code 或其他代理里说：
+不想跑完整 verified-dev-flow，只想用 skill 跑某一个阶段时，在 Codex、Claude Code 或其他代理里说：
 
-> 用 auto-plan-and-execute skill 的 plan-write 角色帮我写计划，需求在 ./req.md，输出到 plans/my-plan.md
+> 用 verified-dev-flow skill 的 plan-write 角色帮我写计划，需求在 ./req.md，输出到 plans/my-plan.md
 
 当前代理会读取 `agents/plan-write.md` 作为角色 prompt，按规范产出。
 
@@ -183,13 +183,13 @@ SKIP_CONFIRM=1 auto-plan-and-execute ./req.md
 
 1. 编辑 `plan-v2.md`
 2. 删除 `plan-review-v2.md`（让脚本重新审查）
-3. `auto-plan-and-execute --resume <名称>`
+3. `verified-dev-flow --resume <名称>`
 
 ### 完全重做
 
 ```bash
-rm -rf .auto-flow/<名称>-<uuid>
-auto-plan-and-execute ./req.md
+rm -rf .verified-dev-flow/<名称>-<uuid>
+verified-dev-flow ./req.md
 ```
 
 ## 故障排除
@@ -199,7 +199,7 @@ auto-plan-and-execute ./req.md
 skill 没按规范输出 STATUS 行。处理方式：
 
 1. 手动打开报告，在末尾加 `STATUS: PASS` 或 `STATUS: NEEDS_REVISION`
-2. `auto-plan-and-execute --resume <名称>` 继续
+2. `verified-dev-flow --resume <名称>` 继续
 
 ### "未产出 plan-vN.md"
 
@@ -220,7 +220,7 @@ git stash       # 或 git reset --hard HEAD
 
 ### 多个 instance 同名
 
-可能在不同时间为同一个需求多次启动 auto-flow。每次会有不同 UUID，互不冲突。用 `--list` 查看，用 `--status <完整名-uuid>` 精确查询。
+可能在不同时间为同一个需求多次启动 verified-dev-flow。每次会有不同 UUID，互不冲突。用 `--list` 查看，用 `--status <完整名-uuid>` 精确查询。
 
 ## 文档命名规则
 
@@ -240,7 +240,7 @@ git stash       # 或 git reset --hard HEAD
 ### 集成 CI/CD
 
 ```yaml
-# .github/workflows/auto-flow.yml
+# .github/workflows/verified-dev-flow.yml
 on:
   workflow_dispatch:
     inputs:
@@ -251,15 +251,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: curl -fsSL https://raw.githubusercontent.com/Vocsal/auto-plan-and-execute/main/install.sh | bash
-      - run: SKIP_CONFIRM=1 .claude/skills/auto-plan-and-execute/auto-flow.sh "${{ inputs.requirements }}"
+      - run: curl -fsSL https://raw.githubusercontent.com/Kuhakucai/Oula-Skills/main/verified-dev-flow/install.sh | bash
+      - run: SKIP_CONFIRM=1 .claude/skills/verified-dev-flow/verified-dev-flow.sh "${{ inputs.requirements }}"
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
 ### 自定义 STATUS 解析逻辑
 
-修改 `scripts/auto-flow.sh` 中 `check_status` 函数，可以加入：
+修改 `scripts/verified-dev-flow.sh` 中 `check_status` 函数，可以加入：
 - 检查报告中"P0 数量"是否为 0
 - 检查问题清单中是否含特定关键词
 - 调用其他工具做额外校验
