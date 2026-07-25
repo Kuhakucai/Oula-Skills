@@ -1,7 +1,5 @@
 # verified-dev-flow
 
-[![CI](https://github.com/Kuhakucai/Oula-Skills/actions/workflows/verified-dev-flow-ci.yml/badge.svg)](https://github.com/Kuhakucai/Oula-Skills/actions/workflows/verified-dev-flow-ci.yml)
-
 通过“编写计划 → 审查计划 → 实施 → 审查实施”四阶段循环，可追溯地完成软件需求。
 
 本目录维护于 [Kuhakucai/Oula-Skills](https://github.com/Kuhakucai/Oula-Skills)；安装脚本默认始终从该仓库的 `main/verified-dev-flow` 获取当前维护版本。
