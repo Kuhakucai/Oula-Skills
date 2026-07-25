@@ -11,34 +11,12 @@
 | 你想完成什么 | 推荐 Skill | 它能帮你做什么 | 使用前提 |
 |---|---|---|---|
 | 在行动前把方案、设计或想法彻底问清楚 | [grill-me](./grill-me/SKILL.md) | 一次只追问一个关键决策，主动给出建议，沿决策树消除歧义并形成共同理解 | 通用 Agent；无需外部依赖 |
-| 先制定方案、评审后再写代码 | [verified-dev-flow](./verified-dev-flow/SKILL.md) | 用“计划 → 评审 → 实施 → 复核”闭环完成软件需求，保留完整过程记录 | 具备文件和终端能力的编码 Agent |
 | 从产品想法产出专业 PRD | [prd-generator](./prd-generator/SKILL.md) | 通过问答补齐产品信息、功能需求、异常场景、竞品研究与验收标准 | 通用 Agent；竞品研究需要联网能力 |
 | 分析产品、平台或公司竞争关系 | [competitive-analysis](./competitive-analysis/SKILL.md) | 使用 PEST、商业模式画布、KANO、SWOT 等框架生成证据驱动的竞品报告 | 需要可靠的信息检索能力 |
+| 先制定方案、评审后再写代码 | [verified-dev-flow](./verified-dev-flow/SKILL.md) | 用“计划 → 评审 → 实施 → 复核”闭环完成软件需求，保留完整过程记录 | 具备文件和终端能力的编码 Agent |
 | 创建、改进或校验自己的 Skill | [skill-creator](./skill-creator/SKILL.md) | 初始化标准 Skill 目录，组织脚本、参考资料、资源并执行结构校验 | Python；校验脚本依赖 PyYAML |
 
 ## 按场景浏览
-
-### 软件开发与 Agent 工程
-
-#### [verified-dev-flow](./verified-dev-flow/README.md)
-
-适合复杂功能开发、重要重构以及需要留下决策记录的任务。它将工作拆成计划编写、计划评审、代码实施和实施复核四个阶段；审查未通过时不会强制放行。
-
-你可能会这样使用：
-
-> 按计划走，先评审方案，再实现这个登录限流需求。
-
-[查看完整 Skill](./verified-dev-flow/SKILL.md) · [安装与命令说明](./verified-dev-flow/README.md)
-
-#### [skill-creator](./skill-creator/SKILL.md)
-
-用于创建或维护跨 Agent 使用的通用 Skill，提供目录初始化、写作规范、资源组织和基础校验脚本。适合把重复工作沉淀成稳定、可复用的能力包。
-
-你可能会这样使用：
-
-> 帮我把这套发布流程整理成一个可复用的 Skill。
-
-[查看完整 Skill](./skill-creator/SKILL.md)
 
 ### 思考澄清与决策
 
@@ -73,6 +51,28 @@
 > 对比产品 A、产品 B 和我们的产品，重点分析商业模式与 AI 能力。
 
 [查看完整 Skill](./competitive-analysis/SKILL.md)
+
+### 软件开发与 Agent 工程
+
+#### [verified-dev-flow](./verified-dev-flow/README.md)
+
+适合复杂功能开发、重要重构以及需要留下决策记录的任务。它将工作拆成计划编写、计划评审、代码实施和实施复核四个阶段；审查未通过时不会强制放行。
+
+你可能会这样使用：
+
+> 按计划走，先评审方案，再实现这个登录限流需求。
+
+[查看完整 Skill](./verified-dev-flow/SKILL.md) · [安装与命令说明](./verified-dev-flow/README.md)
+
+#### [skill-creator](./skill-creator/SKILL.md)
+
+用于创建或维护跨 Agent 使用的通用 Skill，提供目录初始化、写作规范、资源组织和基础校验脚本。适合把重复工作沉淀成稳定、可复用的能力包。
+
+你可能会这样使用：
+
+> 帮我把这套发布流程整理成一个可复用的 Skill。
+
+[查看完整 Skill](./skill-creator/SKILL.md)
 
 ## 如何使用
 
